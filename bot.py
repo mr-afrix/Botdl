@@ -1,7 +1,10 @@
 import os
 import logging
 import html
+import threading
 import requests
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlencode
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -27,7 +30,8 @@ logger = logging.getLogger(__name__)
 def api_get(path: str, params: dict | None = None, timeout: int = 30) -> dict:
     p = dict(params or {})
     p["api_key"] = API_KEY
-    r = requests.get(f"{BASE_URL}{path}", params=p, timeout=timeout)
+    url = f"{BASE_URL}{path}?{urlencode(p)}"
+    r = requests.get(url, timeout=timeout)
     try:
         j = r.json()
     except Exception:
@@ -1078,6 +1082,21 @@ def main():
     app.add_error_handler(on_error)
 
     logger.info("SAGE BOT running…")
+
+    port = int(os.getenv("PORT", 8080))
+
+    class _Health(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+        def log_message(self, *a):
+            pass
+
+    server = HTTPServer(("0.0.0.0", port), _Health)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    logger.info("Health server on port %d", port)
+
     app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
