@@ -26,13 +26,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+}
+
+
 def api_get(path: str, params: dict | None = None, timeout: int = 30) -> dict:
     p = dict(params or {})
     p["api_key"] = API_KEY
     qs = "&".join(f"{k}={requests.utils.quote(str(v), safe='')}" for k, v in p.items())
     url = f"{BASE_URL}{path}?{qs}"
     try:
-        r = requests.get(url, timeout=timeout)
+        r = requests.get(url, headers=_HEADERS, timeout=timeout)
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(f"HTTP {e.response.status_code} from API") from None
