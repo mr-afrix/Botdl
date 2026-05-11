@@ -2,7 +2,10 @@ import os
 import logging
 import html
 import threading
-import requests
+try:
+    from curl_cffi import requests
+except ImportError:
+    import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
@@ -41,7 +44,10 @@ def api_get(path: str, params: dict | None = None, timeout: int = 30) -> dict:
     qs = "&".join(f"{k}={requests.utils.quote(str(v), safe='')}" for k, v in p.items())
     url = f"{BASE_URL}{path}?{qs}"
     try:
-        r = requests.get(url, headers=_HEADERS, timeout=timeout)
+        try:
+            r = requests.get(url, impersonate="chrome124", timeout=timeout)
+        except TypeError:
+            r = requests.get(url, headers=_HEADERS, timeout=timeout)
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(f"HTTP {e.response.status_code} from API") from None
