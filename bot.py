@@ -4,7 +4,6 @@ import html
 import threading
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlencode
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -30,13 +29,19 @@ logger = logging.getLogger(__name__)
 def api_get(path: str, params: dict | None = None, timeout: int = 30) -> dict:
     p = dict(params or {})
     p["api_key"] = API_KEY
-    url = f"{BASE_URL}{path}?{urlencode(p)}"
-    r = requests.get(url, timeout=timeout)
+    qs = "&".join(f"{k}={requests.utils.quote(str(v), safe='')}" for k, v in p.items())
+    url = f"{BASE_URL}{path}?{qs}"
+    try:
+        r = requests.get(url, timeout=timeout)
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.response.status_code} from API") from None
+    except requests.exceptions.RequestException:
+        raise RuntimeError("Failed to reach API") from None
     try:
         j = r.json()
     except Exception:
-        r.raise_for_status()
-        raise
+        raise RuntimeError("Invalid API response") from None
     if not j.get("success", False):
         raise RuntimeError(j.get("error") or "API error")
     return j.get("data", {})
