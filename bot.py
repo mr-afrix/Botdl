@@ -2,10 +2,15 @@ import os
 import logging
 import html
 import threading
+from urllib.parse import quote
+import requests as _std_requests
 try:
-    from curl_cffi import requests
-except ImportError:
-    import requests
+    from curl_cffi.requests import Session as _CffiSession
+    _cffi_session = _CffiSession(impersonate="chrome124")
+    _use_cffi = True
+except Exception:
+    _cffi_session = None
+    _use_cffi = False
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
@@ -33,7 +38,6 @@ _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "application/json, */*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
 }
 
@@ -41,17 +45,18 @@ _HEADERS = {
 def api_get(path: str, params: dict | None = None, timeout: int = 30) -> dict:
     p = dict(params or {})
     p["api_key"] = API_KEY
-    qs = "&".join(f"{k}={requests.utils.quote(str(v), safe='')}" for k, v in p.items())
+    qs = "&".join(f"{k}={quote(str(v), safe='')}" for k, v in p.items())
     url = f"{BASE_URL}{path}?{qs}"
     try:
-        try:
-            r = requests.get(url, impersonate="chrome124", timeout=timeout)
-        except TypeError:
-            r = requests.get(url, headers=_HEADERS, timeout=timeout)
+        if _use_cffi:
+            r = _cffi_session.get(url, timeout=timeout)
+        else:
+            r = _std_requests.get(url, headers=_HEADERS, timeout=timeout)
         r.raise_for_status()
-    except requests.exceptions.HTTPError as e:
-        raise RuntimeError(f"HTTP {e.response.status_code} from API") from None
-    except requests.exceptions.RequestException:
+    except Exception as e:
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        if status:
+            raise RuntimeError(f"HTTP {status} from API") from None
         raise RuntimeError("Failed to reach API") from None
     try:
         j = r.json()
